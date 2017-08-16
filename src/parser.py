@@ -1,3 +1,175 @@
+import sys
+import re
+import numpy as np
+import logging
+
+indent = ['',
+          ' ',
+          '  ',
+          '   ',
+          '    ',
+          '     ',
+          '      ',
+          '       ',
+          '        ',
+          '          ',
+          '           ',
+          '            ',
+          '             ',
+          '              ',
+          '               ',
+          '                ']
+
+class XMLnode(object):
+    """This is a minimal class to allow easy creation of an XML tree
+    from Python. It can write XML, but cannot read it."""
+
+    __slots__ = ('_name', '_value', '_attribs', '_children', '_childmap')
+
+    def __init__(self, name="--", value = ""):
+
+        """Create a new node. Usually this only needs to be explicitly
+        called to create the root element. Method addChild calls this
+        constructor to create the new child node."""
+
+        self._name = name
+
+        # convert 'value' to a string if it is not already, and
+        # strip leading whitespace
+        if not isinstance(value, str):
+            self._value = repr(value).lstrip()
+        else:
+            self._value = value.lstrip()
+
+        self._attribs = {}    # dictionary of attributes
+        self._children = []   # list of child nodes
+        self._childmap = {}   # dictionary of child nodes
+
+
+    def name(self):
+        """The tag name of the node."""
+        return self._name
+
+    def nChildren(self):
+        """Number of child elements."""
+        return len(self._children)
+
+    def addChild(self, name, value=""):
+        """Add a child with tag 'name', and set its value if the value
+        parameter is supplied."""
+
+        # create a new node for the child
+        c = XMLnode(name = name, value = value)
+
+        # add it to the list of children, and to the dictionary
+        # of children
+        self._children.append(c)
+        self._childmap[name] = c
+        return c
+
+    def addComment(self, comment):
+        """Add a comment."""
+        self.addChild(name = '_comment_', value = comment)
+
+    def value(self):
+        """A string containing the element value."""
+        return self._value
+
+    def child(self, name=""):
+        """The child node with specified name."""
+        return self._childmap[name]
+
+    def children(self):
+        """ An iterator over the child nodes """
+        for c in self._children:
+            yield c
+
+    def __getitem__(self, key):
+        """Get an attribute using the syntax node[key]"""
+        return self._attribs[key]
+
+    def __setitem__(self, key, value):
+        """Set a new attribute using the syntax node[key] = value."""
+        self._attribs[key] = value
+
+    def __call__(self):
+        """Allows getting the value using the syntax 'node()'"""
+        return self._value
+
+    def write(self, filename):
+        """Write out the XML tree to a file."""
+        s = ['<?xml version="1.0"?>\n']
+        self._write(s, 0)
+        s.append('\n')
+        if isinstance(filename, str):
+            with open(filename, 'w') as f:
+                f.write(''.join(s))
+        else:
+            filename.write(''.join(s))
+
+    def write_comment(self, s, level):
+        s.append('\n'+indent[level]+'<!--')
+        value = self._value
+        if value:
+            if value[0] != ' ':
+                value = ' '+value
+            if value[-1] != ' ':
+                value += ' '
+        s.append(value+'-->')
+
+    def write_attribs(self, s):
+        for a in self._attribs:
+            s.append(' '+a+'="'+self._attribs[a]+'"')
+
+    def write_value(self, s, level):
+        indnt = indent[level]
+        vv = self._value.lstrip()
+        ieol = vv.find('\n')
+        if ieol >= 0:
+            while True:
+                ieol = vv.find('\n')
+                if ieol >= 0:
+                    s.extend(('\n  ', indnt, vv[:ieol]))
+                    vv = vv[ieol+1:].lstrip()
+                else:
+                    s.extend(('\n  ',indnt,vv))
+                    break
+        else:
+            s.append(self._value)
+
+    def _write(self, s, level = 0):
+        """Internal method used to write the XML representation of each node."""
+        if not self.name:
+            return
+
+        # handle comments
+        if self._name == '_comment_':
+            self.write_comment(s, level)
+            return
+
+        indnt = indent[level]
+
+        # write the opening tag and attributes
+        s.extend((indnt, '<', self._name))
+        self.write_attribs(s)
+
+        if not self._value and not self._children:
+            s.append('/>')
+        else:
+            s.append('>')
+            if self._value:
+                self.write_value(s, level)
+
+            for c in self._children:
+                s.append('\n')
+                c._write(s, level + 2)
+            if self._children:
+                s.extend(('\n', indnt))
+            s.extend(('</', self._name, '>'))
+
+
+_name = 'noname'
+
 """ This module contains the code required to parse BOLSIG+-compatible files.
 To make the code re-usabe in other projects it is independent from the rest of
 the BOLOS code.
@@ -6,12 +178,6 @@ Most user would only use the method :func:`parse` in this module, which is
 documented below.
     
 """
-
-import sys
-import re
-import numpy as np
-import logging
-
 
 def parse(fp):
     """ Parses a BOLSIG+ cross-sections file.  
@@ -98,7 +264,6 @@ def _read_momentum(fp):
              mass_ratio=mass_ratio,
              comment=comment,
              data=data)
-
     return d
 
 RE_ARROW = re.compile('<?->')    
@@ -119,6 +284,9 @@ def _read_excitation(fp):
         threshold = float(arg.split()[0])
 
     d['threshold'] = threshold
+    
+    build(x)
+
     return d
 
 
@@ -146,3 +314,19 @@ KEYWORDS = {"MOMENTUM": _read_momentum,
             "EXCITATION": _read_excitation,
             "IONIZATION": _read_excitation,
             "ATTACHMENT": _read_attachment}
+
+def build(self, x):
+
+    p.addComment("   reaction "+id+"    ")
+    r = p.addChild('reaction')
+
+
+def main():
+    with open('bolsigdb.dat') as fp:
+        processes = parse(fp)
+    x = XMLnode("ctml")
+    x.write("test")
+
+if __name__ == "__main__":
+    main()
+

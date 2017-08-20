@@ -318,30 +318,24 @@ def main():
     for i, p in enumerate(processes):
         r = x.addChild('process')
         r['id'] = str(i)
-        r.addChild(name='kind',value=p['kind'])
-        r.addChild(name='target',value=p['target'])
+        r['type'] = p['kind']
+        r.addChild(name='reactants',value=p['target'])
 
-        # type = 0 for "MOMENTUM", "ELASTIC", and "EFFECTIVE"
-        type = 0
         if p['kind'].find("EXCITATION") is not -1:
-            type = 1
-        if p['kind'].find("IONIZATION") is not -1:
-            type = 2
-        if p['kind'].find("ATTACHMENT") is not -1:
-            type = 3
-
-        if type is 0:
-            r.addChild(name='mass_ratio',value=p['mass_ratio'])
-        elif type is 1:
-            r.addChild(name='product',value=p['product'])
+            r.addChild(name='products',value=p['product'])
             r.addChild(name='threshold',value=p['threshold'])
             if 'weight_ratio' in p:
                 r['reversible'] = 'yes'
                 r.addChild(name='weight_ratio',value=p['weight_ratio'])
-        elif type is 2:
-            r.addChild(name='product',value=p['product'])
+        elif p['kind'].find("IONIZATION") is not -1:
+            r.addChild(name='products',value=p['product'])
             r.addChild(name='threshold',value=p['threshold'])
-
+        elif p['kind'].find("ATTACHMENT") is not -1:
+            r.addChild(name='products',value=p['product'])
+            r.addChild(name='threshold',value=p['threshold'])       
+        else:
+            r.addChild(name='products',value=p['target'])
+            r.addChild(name='mass_ratio',value=p['mass_ratio'])
         data = ''
         for j in p['data']:
             data += '%10.6E ' % j[0]

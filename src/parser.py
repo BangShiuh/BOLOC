@@ -250,7 +250,7 @@ def _read_block(fp, has_arg=True):
     logging.debug("Read process '%s'" % target)
     data = np.loadtxt(_read_until_sep(fp)).tolist()
 
-    return target, arg, comment, data
+    return target, arg, data
 
 #
 # Specialized funcion for each keyword. They all return dictionaries with the
@@ -258,23 +258,21 @@ def _read_block(fp, has_arg=True):
 # 
 def _read_momentum(fp):
     """ Reads a MOMENTUM or EFFECTIVE block. """
-    target, arg, comment, data = _read_block(fp, has_arg=True)
+    target, arg, data = _read_block(fp, has_arg=True)
     mass_ratio = float(arg.split()[0])
     d = dict(target=target,
              mass_ratio=mass_ratio,
-             comment=comment,
              data=data)
     return d
 
 RE_ARROW = re.compile('<?->')    
 def _read_excitation(fp):
     """ Reads an EXCITATION or IONIZATION block. """
-    target, arg, comment, data = _read_block(fp, has_arg=True)
+    target, arg, data = _read_block(fp, has_arg=True)
     lhs, rhs = [s.strip() for s in RE_ARROW.split(target)]
 
     d = dict(target=lhs,
              product=rhs,
-             comment=comment,
              data=data)
 
     if '<->' in target.split():
@@ -284,18 +282,15 @@ def _read_excitation(fp):
         threshold = float(arg.split()[0])
 
     d['threshold'] = threshold
-    
-    build(x)
 
     return d
 
 
 def _read_attachment(fp):
     """ Reads an ATTACHMENT block. """
-    target, arg, comment, data = _read_block(fp, has_arg=False)
+    target, arg, data = _read_block(fp, has_arg=False)
 
-    d = dict(comment=comment,
-             data=data,
+    d = dict(data=data,
              threshold=0.0)
     lr = [s.strip() for s in RE_ARROW.split(target)]
 
@@ -315,17 +310,48 @@ KEYWORDS = {"MOMENTUM": _read_momentum,
             "IONIZATION": _read_excitation,
             "ATTACHMENT": _read_attachment}
 
-def build(self, x):
-
-    p.addComment("   reaction "+id+"    ")
-    r = p.addChild('reaction')
-
 
 def main():
-    with open('bolsigdb.dat') as fp:
+    with open('Cross section.txt') as fp:
         processes = parse(fp)
     x = XMLnode("ctml")
-    x.write("test")
+    for i, p in enumerate(processes):
+        r = x.addChild('process')
+        r['id'] = str(i)
+        r.addChild(name='kind',value=p['kind'])
+        r.addChild(name='target',value=p['target'])
+
+        # type = 0 for "MOMENTUM", "ELASTIC", and "EFFECTIVE"
+        type = 0
+        if p['kind'].find("EXCITATION") is not -1:
+            type = 1
+        if p['kind'].find("IONIZATION") is not -1:
+            type = 2
+        if p['kind'].find("ATTACHMENT") is not -1:
+            type = 3
+
+        if type is 0:
+            r.addChild(name='mass_ratio',value=p['mass_ratio'])
+        elif type is 1:
+            r.addChild(name='product',value=p['product'])
+            r.addChild(name='threshold',value=p['threshold'])
+            if 'weight_ratio' in p:
+                r['reversible'] = 'yes'
+                r.addChild(name='weight_ratio',value=p['weight_ratio'])
+        elif type is 2:
+            r.addChild(name='product',value=p['product'])
+            r.addChild(name='threshold',value=p['threshold'])
+
+        data = ''
+        for j in p['data']:
+            data += '%10.6E ' % j[0]
+            data += '%10.6E ' % j[1]
+            data += '\n'
+
+        r.addChild(name='data',value=data)
+
+    x.write("lxcat.xml")
+
 
 if __name__ == "__main__":
     main()
